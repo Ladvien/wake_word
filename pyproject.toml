@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "your_package_name"
+name = "wake_word"
 version = "0.0.1"
 description = "A short description of your package."
 authors = ["C. Thomas Brittain <cthomasbrittain@hotmail.com>"]
@@ -7,15 +7,16 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.urls]
-homepage = "https://github.com/Ladvien/your_package_name"
-repository = "https://github.com/Ladvien/your_package_name"
-documentation = "https://your_package_name.readthedocs.io/en/latest/"
+homepage = "https://github.com/Ladvien/wake_word"
+repository = "https://github.com/Ladvien/wake_word"
+documentation = "https://wake_word.readthedocs.io/en/latest/"
 
 
 [tool.poetry.dependencies]
-python = ">=3.10"
+python = ">=3.12"
 pyyaml = "^6.0.2"
 rich = "^13.9.4"
+pyaudio = "^0.2.14"
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
