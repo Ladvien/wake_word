@@ -23,6 +23,7 @@ torch = "^2.7.1"
 librosa = "^0.11.0"
 matplotlib = "^3.10.3"
 pyttsx3 = "^2.98"
+tensorflow = "^2.19.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"

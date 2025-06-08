@@ -24,6 +24,8 @@ import logging
 import argparse
 from datetime import datetime
 
+from wake_word.generate import KokoroTTSEngine
+
 # Get project root (parent of wake_word directory)
 PROJECT_ROOT = Path(__file__).parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config.yaml"
@@ -453,17 +455,19 @@ class SyntheticDataGenerator:
         ]:
             directory.mkdir(parents=True, exist_ok=True)
         
-        self.logger.info(f"Setup directories under: {self.data_dir}")
-    
+            self.logger.info(f"Setup directories under: {self.data_dir}")
+        
     def _setup_tts_engines(self):
         """Setup TTS engines in order of preference"""
         self.tts_engines = [
+            KokoroTTSEngine(),  # Add this line
+            # HuggingFaceTTSEngine(),
             PiperTTSEngine(),
             PyTTSX3Engine(),
             FallbackTTSEngine()
         ]
         
-        engine_name = self.config.get('data_generation.tts.engine', 'piper')
+        engine_name = self.config.get('data_generation.tts.engine', 'kokoro')
         self.logger.info(f"Preferred TTS engine: {engine_name}")
     
     def generate_positive_samples(self) -> int:
