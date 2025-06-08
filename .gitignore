@@ -274,3 +274,7 @@ output/
 /target
 /models
 talking.log
+
+
+# Generated data
+background_data/

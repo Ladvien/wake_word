@@ -1,1 +1,299 @@
-name: wake_word
+# Wake Word Detection System Configuration
+# Place this file at the project root level
+
+# Project Information
+project:
+  name: "wake_word_detector"
+  version: "1.0.0"
+  description: "Configurable wake word detection system"
+
+# Paths Configuration (relative to project root)
+paths:
+  # Data and model output
+  output_dir: "./output"
+  models_dir: "./output/models"
+  data_dir: "./output/data"
+  logs_dir: "./output/logs"
+
+  # External dependencies
+  piper_sample_generator: "../piper-sample-generator" # Relative to project root
+
+  # Training data structure
+  training_data:
+    positive: "./output/data/training/positive"
+    negative: "./output/data/training/negative"
+    validation: "./output/data/validation"
+
+# Wake Word Configuration
+wake_word:
+  # Primary wake word - change this to train different words
+  primary: "jade"
+
+  # Variations for robust training
+  variants:
+  - "jade"
+  - "jade,"
+  - "jade."
+  - "hey jade"
+  - "jade please"
+  - "jade now"
+  - "jade here"
+  - "jade listen"
+  - "jade wake up"
+
+# Audio Processing Settings
+audio:
+  sample_rate: 16000 # Audio sample rate in Hz
+  chunk_duration_ms: 1280 # Chunk duration for processing
+  step_size_ms: 160 # Step size for feature extraction
+  channels: 1 # Mono audio
+  format: "wav" # Audio file format
+
+# Data Generation Configuration
+data_generation:
+  # Sample counts
+  n_samples: 1000 # Number of positive samples to generate
+  n_samples_validation: 200 # Validation samples
+  negative_multiplier: 2 # Ratio of negative to positive samples
+
+  # Text-to-Speech Engine Selection
+  tts:
+    # Engine priority: piper -> pyttsx3 -> fallback
+    engine: "piper" # Options: "piper", "pyttsx3", "fallback"
+
+    # Piper TTS Configuration
+    piper:
+      model_path: "../piper-sample-generator/models/en_US-libritts_r-medium.pt"
+      batch_size: 10
+      max_speakers: 200
+      length_scales: [ 0.8, 0.9, 1.0, 1.1, 1.2 ] # Speaking speed variations
+      noise_scales: [ 0.1, 0.333, 0.667 ] # Voice variation
+      min_phoneme_count: 300
+
+    # PyTTSX3 TTS Configuration
+    pyttsx3:
+      voices_to_use: 3 # Number of system voices
+      speech_rates: [ 150, 180, 200, 220 ] # Words per minute
+      volume: 0.9
+
+    # Fallback Synthetic Audio
+    fallback:
+      n_placeholder_samples: 100
+      phonetic_variation: true
+
+# Background Audio Generation
+background_audio:
+  enabled: true
+
+  # Noise samples
+  noise:
+    duration: 10.0 # Duration in seconds
+    n_samples: 100 # Number of samples per type
+    types:
+    - "white_noise"
+    - "pink_noise"
+    - "brown_noise"
+    - "fan_noise"
+    - "traffic_noise"
+    - "cafe_ambience"
+    - "rain_noise"
+    - "wind_noise"
+
+  # Speech-like background
+  speech:
+    duration: 8.0
+    n_samples: 50
+    segment_duration: 0.5
+    # Formant frequencies for different vowel sounds
+    formants:
+    - [ 700, 1220 ] # /ɑ/ as in "father"
+    - [ 270, 2290 ] # /i/ as in "beat"
+    - [ 530, 1840 ] # /ɛ/ as in "bet"
+    - [ 440, 1020 ] # /ɔ/ as in "bought"
+    - [ 300, 870 ] # /u/ as in "boot"
+    - [ 640, 1190 ] # /ʌ/ as in "but"
+    - [ 360, 640 ] # /ɪ/ as in "bit"
+
+  # Musical background
+  music:
+    duration: 12.0
+    n_samples: 30
+    chord_duration: 2.0
+    # C major scale frequencies
+    notes: [ 261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25 ]
+
+# Data Augmentation Configuration
+augmentation:
+  enabled: true
+
+  # Augmentation types to apply
+  types:
+  - "original"
+  - "room_reverb"
+  - "volume_low"
+  - "volume_high"
+  - "background_noise"
+  - "speed_slow"
+  - "speed_fast"
+  - "pitch_shift"
+  - "time_stretch"
+
+  # Augmentation parameters
+  parameters:
+    volume_low_range: [ 0.3, 0.6 ]
+    volume_high_range: [ 1.2, 1.5 ]
+    speed_slow_rate: 0.9
+    speed_fast_rate: 1.1
+    pitch_shift_semitones: [ -2, -1, 1, 2 ]
+    reverb_delay_ms: 100
+    reverb_amplitude: 0.3
+    noise_amplitude: 0.005
+
+# Model Training Configuration
+training:
+  # Training parameters
+  epochs: 50
+  batch_size: 64
+  learning_rate: 0.001
+  weight_decay: 0.0001
+
+  # Performance targets
+  target_accuracy: 0.85
+  target_recall: 0.7
+  target_precision: 0.8
+
+  # Model architecture
+  model:
+    type: "simple_classifier" # Options: "simple_classifier", "cnn", "rnn"
+    input_size: 768 # Feature vector size
+    hidden_size: 128
+    num_layers: 2
+    dropout: 0.2
+    activation: "relu"
+
+  # Training behavior
+  early_stopping:
+    enabled: true
+    patience: 10
+    min_delta: 0.001
+
+  # Data loading
+  dataloader:
+    num_workers: 4
+    pin_memory: true
+    shuffle: true
+
+# Model Export Configuration
+export:
+  formats: [ "onnx", "pytorch" ]
+
+  # ONNX export settings
+  onnx:
+    opset_version: 11
+    dynamic_axes: true
+    export_params: true
+
+  # Model metadata
+  metadata:
+    threshold: 0.5
+    confidence_threshold: 0.7
+    description: "Custom wake word detection model"
+    author: "Wake Word Detection System"
+    license: "MIT"
+
+# Logging Configuration
+logging:
+  level: "INFO" # DEBUG, INFO, WARNING, ERROR
+  console: true
+  file: true
+  file_path: "./output/logs/training.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  # Component-specific logging
+  components:
+    data_generation: "INFO"
+    training: "INFO"
+    augmentation: "DEBUG"
+    tts: "WARNING"
+
+# Deployment Configuration
+deployment:
+  # Target platform
+  platform: "raspberry_pi" # Options: "raspberry_pi", "desktop", "cloud"
+
+  # Network settings for Pi deployment
+  desktop_url: "http://192.168.1.100:8000"
+  pi_device_id: "jade_pi_001"
+
+  # Service configuration
+  service:
+    name: "wake-word-detector"
+    auto_start: true
+    restart_policy: "always"
+
+  # Performance settings for Pi
+  pi_settings:
+    buffer_size: 1024
+    chunk_size: 512
+    detection_cooldown: 2.0 # Seconds between detections
+
+# Development and Testing
+development:
+  # Quick test settings
+  test_mode: false
+  test_samples: 50 # Smaller dataset for testing
+
+  # Debug options
+  debug:
+    save_intermediate_files: false
+    plot_audio_samples: false
+    verbose_tts: false
+
+  # Validation settings
+  validation:
+    split_ratio: 0.2 # 20% for validation
+    cross_validation: false
+    k_folds: 5
+
+# Hardware Configuration
+hardware:
+  # Audio input device
+  microphone:
+    device_index: null # null = default device
+    input_device_name: null # null = default device
+
+  # Processing settings
+  processing:
+    use_gpu: true # Use GPU if available
+    gpu_device: 0 # GPU device index
+    cpu_threads: 4 # Number of CPU threads
+
+  # Memory settings
+  memory:
+    max_ram_usage: "4GB" # Maximum RAM usage
+    cache_audio_samples: true
+
+# Feature Extraction Configuration
+features:
+  type: "mel_spectrogram" # Options: "mel_spectrogram", "mfcc", "raw_audio"
+
+  # Mel spectrogram settings
+  mel_spectrogram:
+    n_mels: 80
+    n_fft: 1024
+    hop_length: 160
+    win_length: 400
+    fmin: 0
+    fmax: 8000
+
+  # MFCC settings
+  mfcc:
+    n_mfcc: 13
+    n_fft: 1024
+    hop_length: 160
+    win_length: 400
+
+  # Normalization
+  normalization:
+    method: "standard" # Options: "standard", "minmax", "robust"
+    per_channel: true

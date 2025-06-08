@@ -17,6 +17,11 @@ python = ">=3.12"
 pyyaml = "^6.0.2"
 rich = "^13.9.4"
 pyaudio = "^0.2.14"
+numpy = ">=1.24,<2.3"
+tqdm = "^4.67.1"
+torch = "^2.7.1"
+librosa = "^0.11.0"
+matplotlib = "^3.10.3"
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
