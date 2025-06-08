@@ -12,7 +12,11 @@ import argparse
 from datetime import datetime
 import json
 import shutil
+import openwakeword
+from openwakeword import train_model
+from openwakeword.model import Model
 from tqdm import tqdm
+
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -20,14 +24,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from wake_word.generate import ConfigManager
 
-try:
-    import openwakeword
-    from openwakeword import train_model
-    from openwakeword.model import Model
-    HAS_OPENWAKEWORD = True
-except ImportError:
-    HAS_OPENWAKEWORD = False
-    print("⚠️  OpenWakeWord not found. Install with: pip install openwakeword")
+HAS_OPENWAKEWORD = True
 
 class OpenWakeWordTrainer:
     """Train wake word models using OpenWakeWord"""

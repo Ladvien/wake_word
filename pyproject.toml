@@ -13,7 +13,7 @@ documentation = "https://wake_word.readthedocs.io/en/latest/"
 
 
 [tool.poetry.dependencies]
-python = ">=3.12"
+python = ">=3.11,<3.14"
 pyyaml = "^6.0.2"
 rich = "^13.9.4"
 pyaudio = "^0.2.14"
@@ -24,6 +24,13 @@ librosa = "^0.11.0"
 matplotlib = "^3.10.3"
 pyttsx3 = "^2.98"
 tensorflow = "^2.19.0"
+gradio-client = "^1.10.2"
+onnxruntime = "^1.22.0"
+soundfile = "^0.13.1"
+kokoro-onnx = "^0.4.9"
+openwakeword = "^0.6.0"
+torchaudio = "^2.7.1"
+transformers = "^4.52.4"
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
