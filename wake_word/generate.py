@@ -22,7 +22,6 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, Tuple
 import logging
 import argparse
-from datetime import datetime
 
 # Get project root (parent of wake_word directory)
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -277,7 +276,206 @@ class PyTTSX3Engine(TTSEngine):
             return 0
 
 
-class FallbackTTSEngine(TTSEngine):
+class KokoroTTSEngine(TTSEngine):
+    """Kokoro TTS engine using Hugging Face Spaces API"""
+    
+    def __init__(self):
+        self.api_url = "https://hexgrad-kokoro-tts.hf.space/api/predict"
+        self.session = None
+        
+    def generate_samples(self, text_variants: List[str], output_dir: Path, config: ConfigManager) -> int:
+        try:
+            import requests
+            import io
+            import time
+            
+            print("🎙️ Using Kokoro TTS from Hugging Face Spaces")
+            
+            # Get configuration
+            n_samples = config.get('data_generation.n_samples', 1000)
+            samples_per_variant = max(1, n_samples // len(text_variants))
+            
+            # Kokoro TTS configuration
+            kokoro_config = config.get('data_generation.tts.kokoro', {})
+            voice_presets = kokoro_config.get('voice_presets', ['af_sarah', 'am_adam', 'bf_emma', 'bm_lewis'])
+            speed_variations = kokoro_config.get('speed_variations', [0.9, 1.0, 1.1])
+            
+            total_generated = 0
+            session = requests.Session()
+            
+            for variant_idx, variant in enumerate(text_variants):
+                print(f"  📝 Generating samples for '{variant}'...")
+                variant_samples = 0
+                
+                while variant_samples < samples_per_variant:
+                    # Select voice and speed variation
+                    voice = random.choice(voice_presets)
+                    speed = random.choice(speed_variations)
+                    
+                    try:
+                        # Prepare API request
+                        payload = {
+                            "data": [
+                                variant,  # text
+                                voice,    # voice preset
+                                speed,    # speed
+                                0,        # pitch (0 = default)
+                                "mp3"     # format
+                            ]
+                        }
+                        
+                        # Make API request
+                        response = session.post(
+                            self.api_url, 
+                            json=payload,
+                            timeout=30
+                        )
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            
+                            # The API returns a data structure with the audio file path
+                            if 'data' in result and len(result['data']) > 0:
+                                audio_data = result['data'][0]
+                                
+                                # Download the generated audio
+                                if isinstance(audio_data, str) and audio_data.startswith('http'):
+                                    audio_response = session.get(audio_data, timeout=30)
+                                    
+                                    if audio_response.status_code == 200:
+                                        # Save the audio file
+                                        filename = output_dir / f"kokoro_{variant_idx}_{voice}_{variant_samples:03d}.wav"
+                                        
+                                        # Convert MP3 to WAV if needed
+                                        if audio_data.endswith('.mp3'):
+                                            # Save as MP3 first, then convert
+                                            mp3_filename = filename.with_suffix('.mp3')
+                                            with open(mp3_filename, 'wb') as f:
+                                                f.write(audio_response.content)
+                                            
+                                            # Convert to WAV using ffmpeg or pydub
+                                            try:
+                                                import subprocess
+                                                subprocess.run([
+                                                    'ffmpeg', '-y', '-i', str(mp3_filename), 
+                                                    '-ar', '16000', '-ac', '1', str(filename)
+                                                ], check=True, capture_output=True)
+                                                mp3_filename.unlink()  # Remove MP3 file
+                                            except (subprocess.CalledProcessError, FileNotFoundError):
+                                                # Fallback: try with pydub
+                                                try:
+                                                    from pydub import AudioSegment
+                                                    audio = AudioSegment.from_mp3(str(mp3_filename))
+                                                    audio = audio.set_frame_rate(16000).set_channels(1)
+                                                    audio.export(str(filename), format="wav")
+                                                    mp3_filename.unlink()
+                                                except ImportError:
+                                                    print(f"  ⚠ Could not convert MP3 to WAV. Install ffmpeg or pydub.")
+                                                    filename.with_suffix('.mp3').rename(filename.with_suffix('.mp3'))
+                                        else:
+                                            # Save directly as WAV
+                                            with open(filename, 'wb') as f:
+                                                f.write(audio_response.content)
+                                        
+                                        variant_samples += 1
+                                        total_generated += 1
+                                        
+                                        if variant_samples % 10 == 0:
+                                            print(f"    ✓ Generated {variant_samples}/{samples_per_variant} samples")
+                                    else:
+                                        print(f"  ⚠ Failed to download audio: {audio_response.status_code}")
+                                else:
+                                    print(f"  ⚠ Unexpected audio data format: {type(audio_data)}")
+                            else:
+                                print(f"  ⚠ No audio data in API response")
+                        else:
+                            print(f"  ⚠ API request failed: {response.status_code}")
+                            print(f"    Response: {response.text[:200]}...")
+                    
+                    except requests.exceptions.RequestException as e:
+                        print(f"  ⚠ Request error: {e}")
+                    except Exception as e:
+                        print(f"  ⚠ Error generating sample: {e}")
+                    
+                    # Rate limiting - be nice to the API
+                    time.sleep(random.uniform(1, 3))
+                    
+                    # Safety break if we're not making progress
+                    if variant_samples == 0 and total_generated == 0:
+                        print(f"  ⚠ Could not generate any samples, trying fallback...")
+                        break
+                
+                print(f"  ✓ Generated {variant_samples} samples for '{variant}' using voice '{voice}'")
+            
+            session.close()
+            return total_generated
+            
+        except ImportError:
+            print("⚠ requests library not available for Kokoro TTS")
+            return 0
+        except Exception as e:
+            print(f"⚠ Kokoro TTS failed: {e}")
+            return 0
+
+
+class HuggingFaceTTSEngine(TTSEngine):
+    """Generic Hugging Face TTS engine using transformers"""
+    
+    def generate_samples(self, text_variants: List[str], output_dir: Path, config: ConfigManager) -> int:
+        try:
+            from transformers import pipeline
+            import torch
+            
+            print("🎙️ Using Hugging Face transformers TTS")
+            
+            # Initialize TTS pipeline
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            tts_config = config.get('data_generation.tts.huggingface', {})
+            model_name = tts_config.get('model', 'microsoft/speecht5_tts')
+            
+            tts = pipeline("text-to-speech", model=model_name, device=device)
+            
+            n_samples = config.get('data_generation.n_samples', 1000)
+            samples_per_variant = max(1, n_samples // len(text_variants))
+            
+            total_generated = 0
+            
+            for variant_idx, variant in enumerate(text_variants):
+                print(f"  📝 Generating samples for '{variant}'...")
+                
+                for i in range(samples_per_variant):
+                    try:
+                        # Generate speech
+                        result = tts(variant)
+                        
+                        # Save audio
+                        filename = output_dir / f"hf_tts_{variant_idx}_{i:03d}.wav"
+                        
+                        # Extract audio data and sample rate
+                        audio_data = result["audio"]
+                        sample_rate = result["sampling_rate"]
+                        
+                        # Save using soundfile
+                        sf.write(filename, audio_data, sample_rate)
+                        total_generated += 1
+                        
+                        if (i + 1) % 10 == 0:
+                            print(f"    ✓ Generated {i+1}/{samples_per_variant} samples")
+                            
+                    except Exception as e:
+                        print(f"  ⚠ Error generating sample {i}: {e}")
+                        continue
+                
+                print(f"  ✓ Generated {samples_per_variant} samples for '{variant}'")
+            
+            return total_generated
+            
+        except ImportError:
+            print("⚠ transformers library not available for Hugging Face TTS")
+            return 0
+        except Exception as e:
+            print(f"⚠ Hugging Face TTS failed: {e}")
+            return 0
     """Fallback TTS engine that generates synthetic audio"""
     
     def generate_samples(self, text_variants: List[str], output_dir: Path, config: ConfigManager) -> int:
@@ -306,40 +504,89 @@ class FallbackTTSEngine(TTSEngine):
         """Create synthetic audio that resembles speech patterns"""
         t = np.linspace(0, duration, int(sr * duration))
         
-        # Basic phonetic mapping for common wake words
+        # Improved phonetic mapping with more realistic formants
         phonetic_freqs = {
-            'jade': [(300, 2000, 0.3), (500, 1800, 0.5), (250, 1700, 0.2)],
-            'computer': [(400, 1500, 0.3), (500, 1200, 0.4), (300, 1800, 0.3)],
-            'alexa': [(600, 1400, 0.3), (400, 1600, 0.4), (300, 1200, 0.3)],
-            'hey': [(500, 1500, 0.4), (400, 1200, 0.4)],
+            'jade': [
+                (300, 2200, 0.4, 0.3),   # /dʒ/ - voiced palato-alveolar affricate
+                (500, 1800, 0.5, 0.4),   # /eɪ/ - diphthong
+                (250, 1700, 0.3, 0.2)    # /d/ - voiced alveolar stop
+            ],
+            'computer': [
+                (350, 1500, 0.3, 0.2),   # /k/
+                (400, 1200, 0.4, 0.3),   # /ʌ/
+                (500, 1800, 0.3, 0.3),   # /m/
+                (450, 1600, 0.4, 0.3),   # /p/
+                (550, 1900, 0.4, 0.3),   # /ju/
+                (300, 1400, 0.3, 0.2),   # /t/
+                (400, 1500, 0.3, 0.3)    # /ər/
+            ],
+            'hey': [
+                (500, 1500, 0.3, 0.2),   # /h/
+                (500, 1800, 0.5, 0.4)    # /eɪ/
+            ],
         }
         
         # Extract primary word for phonetic mapping
         primary_word = text.split()[0].lower() if text else 'default'
-        freqs = phonetic_freqs.get(primary_word, [(400, 1500, 0.3), (500, 1200, 0.4)])
+        freqs = phonetic_freqs.get(primary_word, [(400, 1500, 0.3, 0.3), (500, 1200, 0.4, 0.3)])
         
         audio = np.zeros_like(t)
         segment_length = len(t) // len(freqs)
         
-        for i, (f1, f2, intensity) in enumerate(freqs):
+        # Create fundamental frequency (pitch)
+        f0 = 120 + 30 * np.sin(2 * np.pi * 2 * t)  # Varying pitch around 120Hz
+        
+        for i, (f1, f2, intensity1, intensity2) in enumerate(freqs):
             start_idx = i * segment_length
             end_idx = min((i + 1) * segment_length, len(t))
             segment_t = t[start_idx:end_idx]
+            segment_f0 = f0[start_idx:end_idx]
             
-            # Generate formant-like audio
-            segment_audio = (intensity * np.sin(2 * np.pi * f1 * segment_t) + 
-                           intensity * 0.5 * np.sin(2 * np.pi * f2 * segment_t))
+            # Create voiced speech with harmonics
+            segment_audio = np.zeros_like(segment_t)
             
-            # Add natural envelope
-            envelope = np.exp(-2 * segment_t / duration) * (1 + 0.3 * np.sin(8 * np.pi * segment_t))
+            # Add harmonics (like a vocal tract)
+            for harmonic in range(1, 6):  # First 5 harmonics
+                harmonic_freq = segment_f0 * harmonic
+                
+                # Formant filtering - emphasize frequencies near F1 and F2
+                f1_response = 1.0 / (1.0 + ((harmonic_freq - f1) / 100) ** 2)
+                f2_response = 1.0 / (1.0 + ((harmonic_freq - f2) / 150) ** 2)
+                
+                amplitude = (intensity1 * f1_response + intensity2 * f2_response) / harmonic
+                segment_audio += amplitude * np.sin(2 * np.pi * harmonic_freq * segment_t)
+            
+            # Add speech-like envelope (attack, sustain, release)
+            envelope_length = len(segment_t)
+            attack_length = int(0.1 * envelope_length)
+            release_length = int(0.2 * envelope_length)
+            sustain_length = envelope_length - attack_length - release_length
+            
+            envelope = np.ones(envelope_length)
+            
+            # Attack
+            if attack_length > 0:
+                envelope[:attack_length] = np.linspace(0, 1, attack_length)
+            
+            # Release
+            if release_length > 0:
+                envelope[-release_length:] = np.linspace(1, 0, release_length)
+            
+            # Add some amplitude modulation for natural speech
+            mod_freq = 5 + 3 * np.random.random()  # 5-8 Hz modulation
+            amplitude_mod = 1 + 0.2 * np.sin(2 * np.pi * mod_freq * segment_t)
+            envelope *= amplitude_mod
+            
             segment_audio *= envelope
-            
             audio[start_idx:end_idx] = segment_audio
         
-        # Add realistic noise and normalize
-        audio += 0.02 * np.random.normal(0, 1, len(audio))
+        # Add some breathiness/noise for realism
+        noise = 0.05 * np.random.normal(0, 1, len(audio))
+        audio += noise
+        
+        # Normalize to reasonable amplitude
         if np.max(np.abs(audio)) > 0:
-            audio = audio / np.max(np.abs(audio)) * 0.7
+            audio = audio / np.max(np.abs(audio)) * 0.8  # Increase amplitude
         
         return audio
     
@@ -409,12 +656,14 @@ class SyntheticDataGenerator:
     def _setup_tts_engines(self):
         """Setup TTS engines in order of preference"""
         self.tts_engines = [
+            KokoroTTSEngine(),
+            HuggingFaceTTSEngine(),
             PiperTTSEngine(),
             PyTTSX3Engine(),
             FallbackTTSEngine()
         ]
         
-        engine_name = self.config.get('data_generation.tts.engine', 'piper')
+        engine_name = self.config.get('data_generation.tts.engine', 'kokoro')
         self.logger.info(f"Preferred TTS engine: {engine_name}")
     
     def generate_positive_samples(self) -> int:
@@ -940,7 +1189,7 @@ Examples:
     parser.add_argument("--wake-word", help="Override wake word from config")
     parser.add_argument("--samples", type=int, help="Override number of samples to generate")
     parser.add_argument("--output-dir", type=Path, help="Override output directory")
-    parser.add_argument("--engine", choices=['piper', 'pyttsx3', 'fallback'], help="Override TTS engine")
+    parser.add_argument("--engine", choices=['kokoro', 'huggingface', 'piper', 'pyttsx3', 'fallback'], help="Override TTS engine")
     parser.add_argument("--no-augment", action='store_true', help="Disable data augmentation")
     parser.add_argument("--test-mode", action='store_true', help="Generate small dataset for testing")
     
