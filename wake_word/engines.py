@@ -7,14 +7,16 @@ from typing import Union
 
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 
-from wake_word.tts_base import TTSEngine
+from wake_word.base import TTSEngine
 
 
 class KokoroTTSEngine(TTSEngine):
     def __init__(
         self,
         model_id: str = "k2-fsa/kokoro-82m-en",
-        device: Union[str, torch.device] = "cuda" if torch.cuda.is_available() else "cpu",
+        device: Union[str, torch.device] = (
+            "cuda" if torch.cuda.is_available() else "cpu"
+        ),
         sample_rate: int = 16000,
     ):
         self.model_id = model_id
@@ -26,7 +28,9 @@ class KokoroTTSEngine(TTSEngine):
         self.model = AutoModelForSpeechSeq2Seq.from_pretrained(model_id).to(self.device)
         self.model.eval()
 
-    def synthesize(self, text: str, output_path: Union[str, Path] = None) -> torch.Tensor:
+    def synthesize(
+        self, text: str, output_path: Union[str, Path] = None
+    ) -> torch.Tensor:
         """
         Synthesizes speech from text.
         Returns: waveform (Tensor) or saves to file if output_path is given.

@@ -64,7 +64,8 @@ data_generation:
     # Kokoro ONNX Configuration
     kokoro:
       # Model configuration
-      model_path: null # null = use default/auto-download
+      model_path: models/kokoro-v0_19.onnx
+      model_url: https://your-host.com/models/kokoro-v0_19.onnx
       model_type: "kokoro-v0_19" # Kokoro model version
 
       # Voice presets available in Kokoro
